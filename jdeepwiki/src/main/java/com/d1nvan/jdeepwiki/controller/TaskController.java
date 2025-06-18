@@ -29,9 +29,6 @@ public class TaskController {
 
     @Autowired
     private TaskService taskService;
-    
-    @Autowired
-    private FileService fileService;
 
     @PostMapping("/create/git")
     public Result<TaskVo> createFromGit(@RequestBody CreateTaskParams params) {

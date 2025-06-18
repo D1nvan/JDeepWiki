@@ -36,7 +36,7 @@ public class CatalogueService extends ServiceImpl<CatalogueMapper, Catalogue> {
         String genCataloguePrompt = AnalyzeCataloguePrompt.prompt
                 .replace("{{$code_files}}", fileTree)
                 .replace("{{$repository_location}}", localpath);
-        String result = llmService.call(genCataloguePrompt, null);
+        String result = llmService.callWithTools(genCataloguePrompt);
         log.info("LLM生成项目目录结果:{}", result);
 
         String documentationStructure = RegexUtil.extractXmlTagContent(result, "<documentation_structure>", "</documentation_structure>");
@@ -58,7 +58,7 @@ public class CatalogueService extends ServiceImpl<CatalogueMapper, Catalogue> {
             log.error(msg);
             throw new RuntimeException(msg);
         } catch (RuntimeException e) {
-            log.error("解析LLM生成项目目录失败");
+            log.error("解析LLM生成项目目录失败", e);
             throw e;
         }
     }
@@ -95,24 +95,25 @@ public class CatalogueService extends ServiceImpl<CatalogueMapper, Catalogue> {
         return saveList;
     }
 
-    public void parallelGenerateCatalogueDetail(String fileTree, GenCatalogueDTO genCatalogueDTO) {
+    public void parallelGenerateCatalogueDetail(String fileTree, GenCatalogueDTO genCatalogueDTO, String localPath) {
         genCatalogueDTO.getCatalogueList().forEach(catalogue -> {
             if(StringUtils.isNotEmpty(catalogue.getParentCatalogueId())){
-                generateCatalogueDetail(catalogue, fileTree, genCatalogueDTO.getCatalogueStruct());
+                generateCatalogueDetail(catalogue, fileTree, genCatalogueDTO.getCatalogueStruct(), localPath);
             }
         });
     }
 
     @Async("GenCatalogueDetailExcutor")
-    public void generateCatalogueDetail(Catalogue catalogue, String fileTree, CatalogueStruct catalogueStruct) {
+    public void generateCatalogueDetail(Catalogue catalogue, String fileTree, CatalogueStruct catalogueStruct, String localPath) {
         try{
             log.info("LLM开始生成{}目录详情", catalogue.getName());
             String template = GenDocPrompt.prompt
+                    .replace("{{$repository_location}}", localPath)
                     .replace("{{$prompt}}", catalogue.getPrompt())
                     .replace("{{$title}}", catalogue.getName())
                     .replace("{{$repository_files}}", fileTree)
                     .replace("{{$catalogue}}", JSON.toJSONString(catalogueStruct));
-            String result = llmService.call(template, null);
+            String result = llmService.callWithTools(template);
             log.info("LLM生成{}目录详情结果:{}", catalogue.getName(), result);
             if(StringUtils.isEmpty(result)){
                 throw new RuntimeException("LLM生成目录详情返回结果为空");

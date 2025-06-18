@@ -12,6 +12,10 @@ public class GenDocPrompt {
     {{$prompt}}
     </documentation_objective>
 
+    <repository_location>
+    {{$repository_location}}
+    </repository_location>
+
     <document_title>
     {{$title}}
     </document_title>

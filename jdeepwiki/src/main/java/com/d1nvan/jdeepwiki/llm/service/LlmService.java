@@ -29,13 +29,27 @@ public class LlmService {
 
         this.chatClient = chatClientBuilder
                             .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
-                            .defaultOptions(ToolCallingChatOptions.builder().toolCallbacks(allTools).build())
                             .build();
 
         this.allTools = allTools;
     }
 
-    public String call(String query, String conversationId){
+    public String callWithTools(String query) {
+        return chatClient
+                .prompt(query)
+                .options(ToolCallingChatOptions.builder().toolCallbacks(allTools).build())
+                .call()
+                .content();
+    }
+
+    public String callWithoutTools(String query) {
+        return chatClient
+                .prompt(query)
+                .call()
+                .content();
+    }
+
+    public String chatWithTools(String query, String conversationId) {
         return chatClient
                 .prompt(query)
                 .advisors(a -> a.param(CONVERSATION_ID, StringUtils.isEmpty(conversationId) ? UUID.randomUUID().toString() : conversationId))

@@ -83,7 +83,7 @@ public class TaskService extends ServiceImpl<TaskMapper, Task> {
             GenCatalogueDTO catalogueDTO = catalogueService.generateCatalogue(fileTree, context.getLocalPath());
 
             // 3.生成项目目录 并生成目录详情
-            catalogueService.parallelGenerateCatalogueDetail(fileTree, catalogueDTO);
+            catalogueService.parallelGenerateCatalogueDetail(fileTree, catalogueDTO, context.getLocalPath());
         }catch (Exception e) {
             log.error("任务执行失败", e);
             Task task = context.getTask();

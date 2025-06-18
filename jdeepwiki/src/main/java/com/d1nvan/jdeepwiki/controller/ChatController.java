@@ -23,7 +23,7 @@ public class ChatController {
     public String callChat(@RequestParam(value = "query", defaultValue = "你好，很高兴认识你，能简单介绍一下自己吗？") String query) {
         return chatClientBuilder
                 .defaultOptions(ToolCallingChatOptions.builder()
-                               .toolCallbacks(allTools).build()
+                                .toolCallbacks(allTools).build()
                             )
                 .build()
                 .prompt(query)
