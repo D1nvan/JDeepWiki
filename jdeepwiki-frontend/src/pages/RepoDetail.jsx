@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Card, 
+  Layout,
+  Tree,
   Typography, 
   Button, 
   Space, 
-  Tabs, 
-  Divider, 
   Breadcrumb,
   Tag,
   Spin,
   Alert,
-  Input
+  Card,
+  Divider
 } from 'antd';
 import { 
   GithubOutlined, 
@@ -18,8 +18,9 @@ import {
   HomeOutlined,
   ShareAltOutlined,
   FileTextOutlined,
-  QuestionCircleOutlined,
-  CodeOutlined
+  FolderOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -28,70 +29,123 @@ import { formatDateTime } from '../utils/dateFormat';
 import PageLoading from '../components/PageLoading';
 
 const { Title, Text, Paragraph } = Typography;
-const { TabPane } = Tabs;
-const { TextArea } = Input;
+const { Sider, Content } = Layout;
 
 const RepoDetail = () => {
   const navigate = useNavigate();
   const { taskId } = useParams();
   const [loading, setLoading] = useState(true);
   const [task, setTask] = useState(null);
+  const [catalogueTree, setCatalogueTree] = useState([]);
+  const [selectedContent, setSelectedContent] = useState('');
+  const [selectedTitle, setSelectedTitle] = useState('');
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('1');
+  const [collapsed, setCollapsed] = useState(false);
+  const [treeLoading, setTreeLoading] = useState(false);
 
-  // 获取任务详情
+  // 获取任务详情和目录树
   useEffect(() => {
-    const fetchTaskDetail = async () => {
+    const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await TaskApi.getTaskDetail(taskId);
-        if (response.code === 200) {
-          setTask(response.data);
-          setError('');
+        // 并行获取任务详情和目录树
+        const [taskResponse, treeResponse] = await Promise.all([
+          TaskApi.getTaskDetail(taskId),
+          TaskApi.getCatalogueTree(taskId)
+        ]);
+        
+        if (taskResponse.code === 200) {
+          setTask(taskResponse.data);
         } else {
-          setError(response.msg || '获取仓库详情失败');
+          setError(taskResponse.msg || '获取仓库详情失败');
+          return;
         }
+        
+        if (treeResponse.code === 200) {
+          const treeData = buildTreeData(treeResponse.data);
+          setCatalogueTree(treeData);
+          
+          // 默认选择第一个有内容的叶子节点
+          const firstLeaf = findFirstLeafWithContent(treeResponse.data);
+          if (firstLeaf) {
+            setSelectedContent(firstLeaf.content || '');
+            setSelectedTitle(firstLeaf.title || '');
+          }
+        }
+        
+        setError('');
       } catch (error) {
-        console.error('获取仓库详情失败:', error);
-        setError('获取仓库详情失败');
+        console.error('获取数据失败:', error);
+        setError('获取数据失败');
       } finally {
         setLoading(false);
       }
     };
 
     if (taskId) {
-      fetchTaskDetail();
+      fetchData();
     } else {
       setError('无效的仓库ID');
       setLoading(false);
     }
   }, [taskId]);
 
-  // 随机生成星星数
-  const getRandomStars = () => {
-    return Math.floor(Math.random() * 200) + 1;
+  // 构建树形数据结构
+  const buildTreeData = (data) => {
+    const buildNode = (item) => ({
+      title: item.title,
+      key: item.catalogueId,
+      icon: item.children && item.children.length > 0 ? <FolderOutlined /> : <FileTextOutlined />,
+      content: item.content,
+      name: item.name,
+      isLeaf: !item.children || item.children.length === 0,
+      children: item.children ? item.children.map(buildNode) : []
+    });
+
+    return data.map(buildNode);
   };
 
-  // 动画配置
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { 
-      opacity: 1,
-      transition: { 
-        duration: 0.5,
-        when: "beforeChildren",
-        staggerChildren: 0.1
+  // 查找第一个有内容的叶子节点
+  const findFirstLeafWithContent = (data) => {
+    for (const item of data) {
+      if (item.children && item.children.length > 0) {
+        const found = findFirstLeafWithContent(item.children);
+        if (found) return found;
+      } else if (item.content) {
+        return item;
+      }
+    }
+    return null;
+  };
+
+  // 查找节点内容
+  const findNodeContent = (treeData, key) => {
+    for (const node of treeData) {
+      if (node.key === key) {
+        return { content: node.content, title: node.title };
+      }
+      if (node.children && node.children.length > 0) {
+        const found = findNodeContent(node.children, key);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  // 处理节点选择
+  const handleTreeSelect = (selectedKeys) => {
+    if (selectedKeys.length > 0) {
+      const nodeData = findNodeContent(catalogueTree, selectedKeys[0]);
+      if (nodeData) {
+        setSelectedContent(nodeData.content || '暂无内容');
+        setSelectedTitle(nodeData.title || '');
       }
     }
   };
 
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { 
-      y: 0, 
-      opacity: 1,
-      transition: { type: 'spring', stiffness: 300, damping: 24 }
-    }
+  // 随机生成星星数
+  const getRandomStars = () => {
+    return Math.floor(Math.random() * 200) + 1;
   };
 
   // 渲染加载状态
@@ -102,32 +156,35 @@ const RepoDetail = () => {
   // 渲染错误状态
   if (error) {
     return (
-      <Alert
-        message="错误"
-        description={error}
-        type="error"
-        showIcon
-        action={
-          <Button size="small" type="primary" onClick={() => navigate('/')}>
-            返回首页
-          </Button>
-        }
-      />
+      <div style={{ padding: '20px' }}>
+        <Alert
+          message="错误"
+          description={error}
+          type="error"
+          showIcon
+          action={
+            <Button size="small" type="primary" onClick={() => navigate('/')}>
+              返回首页
+            </Button>
+          }
+        />
+      </div>
     );
   }
 
   // 提取仓库名称
-  const repoName = task?.projectUrl.includes('github.com') 
+  const repoName = task?.projectUrl?.includes('github.com') 
     ? task.projectUrl.split('github.com/')[1]?.split('/').slice(0, 2).join(' / ')
     : task?.projectName;
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px' }}>
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* 页面头部 */}
+      <div style={{ 
+        padding: '16px 24px', 
+        borderBottom: '1px solid #f0f0f0',
+        background: '#fff'
+      }}>
         <Breadcrumb style={{ marginBottom: 16 }}>
           <Breadcrumb.Item href="/" onClick={(e) => {
             e.preventDefault();
@@ -138,115 +195,131 @@ const RepoDetail = () => {
           <Breadcrumb.Item>{repoName}</Breadcrumb.Item>
         </Breadcrumb>
 
-        <motion.div variants={itemVariants}>
-          <Card>
-            <Space direction="vertical" size="large" style={{ width: '100%' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <Space direction="vertical" size="small">
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <GithubOutlined style={{ fontSize: 24, marginRight: 12 }} />
-                    <Title level={3} style={{ margin: 0 }}>{repoName}</Title>
-                  </div>
-                  <Paragraph 
-                    style={{ 
-                      color: 'rgba(0, 0, 0, 0.65)', 
-                      marginTop: 8,
-                      maxWidth: 700
-                    }}
-                  >
-                    {task?.projectName} - 在 {formatDateTime(task?.createTime, 'YYYY-MM-DD')} 创建
-                  </Paragraph>
-                </Space>
-                
-                <Space>
-                  <Button 
-                    type="primary" 
-                    icon={<ShareAltOutlined />}
-                    onClick={() => navigator.clipboard.writeText(window.location.href)}
-                  >
-                    分享
-                  </Button>
-                  <Button
-                    href={task?.projectUrl}
-                    target="_blank"
-                    icon={<GithubOutlined />}
-                  >
-                    查看源码
-                  </Button>
-                </Space>
-              </div>
-
-              <div>
-                <Space size="large">
-                  <Tag icon={<StarOutlined />} color="default">
-                    {getRandomStars()}k stars
-                  </Tag>
-                  <Text type="secondary">
-                    更新于 {formatDateTime(task?.updateTime, 'YYYY-MM-DD')}
-                  </Text>
-                </Space>
-              </div>
-
-              <Divider style={{ margin: '16px 0' }} />
-
-              <Tabs 
-                activeKey={activeTab} 
-                onChange={setActiveTab}
-                style={{ marginTop: 8 }}
-              >
-                <TabPane 
-                  tab={<span><FileTextOutlined /> 仓库概览</span>} 
-                  key="1"
-                >
-                  <div style={{ minHeight: 300, padding: '16px 0' }}>
-                    <Paragraph>
-                      这是一个对 <strong>{repoName}</strong> 的深度分析页面。以下是关于这个仓库的基本信息：
-                    </Paragraph>
-                    <ul>
-                      <li>项目名称: {task?.projectName}</li>
-                      <li>项目地址: <a href={task?.projectUrl} target="_blank" rel="noreferrer">{task?.projectUrl}</a></li>
-                      <li>创建时间: {formatDateTime(task?.createTime)}</li>
-                      <li>更新时间: {formatDateTime(task?.updateTime)}</li>
-                    </ul>
-                    <Paragraph>
-                      您可以在此页面浏览代码结构、提问问题以及深入理解这个仓库。
-                    </Paragraph>
-                  </div>
-                </TabPane>
-                <TabPane 
-                  tab={<span><CodeOutlined /> 代码结构</span>} 
-                  key="2"
-                >
-                  <div style={{ minHeight: 300, padding: '16px 0' }}>
-                    <Alert
-                      message="正在处理代码结构"
-                      description="我们正在分析仓库的代码结构，这个过程可能需要一些时间。请稍后再查看。"
-                      type="info"
-                      showIcon
-                    />
-                  </div>
-                </TabPane>
-                <TabPane 
-                  tab={<span><QuestionCircleOutlined /> 提问</span>} 
-                  key="3"
-                >
-                  <div style={{ minHeight: 300, padding: '16px 0' }}>
-                    <Paragraph>
-                      对这个仓库有任何问题？输入您的问题，AI将帮助您理解代码。
-                    </Paragraph>
-                    <TextArea
-                      rows={4}
-                      placeholder="例如：这个项目的主要功能是什么？如何使用这个库？"
-                      style={{ marginBottom: 16 }}
-                    />
-                    <Button type="primary">提交问题</Button>
-                  </div>
-                </TabPane>
-              </Tabs>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Space direction="vertical" size="small">
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <GithubOutlined style={{ fontSize: 20, marginRight: 8 }} />
+              <Title level={4} style={{ margin: 0 }}>{repoName}</Title>
+            </div>
+            <Space size="large">
+              <Tag icon={<StarOutlined />} color="default">
+                {getRandomStars()}k stars
+              </Tag>
+              <Text type="secondary">
+                更新于 {formatDateTime(task?.updateTime, 'YYYY-MM-DD')}
+              </Text>
             </Space>
-          </Card>
-        </motion.div>
-      </motion.div>
+          </Space>
+          
+          <Space>
+            <Button 
+              type="primary" 
+              icon={<ShareAltOutlined />}
+              onClick={() => navigator.clipboard?.writeText(window.location.href)}
+            >
+              分享
+            </Button>
+            <Button
+              href={task?.projectUrl}
+              target="_blank"
+              icon={<GithubOutlined />}
+            >
+              查看源码
+            </Button>
+          </Space>
+        </div>
+      </div>
+
+      {/* 主体布局 */}
+      <Layout style={{ flex: 1 }}>
+        {/* 左侧目录树 */}
+        <Sider 
+          width={300} 
+          collapsible
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
+          style={{ 
+            background: '#fff',
+            borderRight: '1px solid #f0f0f0'
+          }}
+          trigger={
+            <div style={{ textAlign: 'center', padding: '8px' }}>
+              {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            </div>
+          }
+        >
+          <div style={{ padding: '16px 8px' }}>
+            {!collapsed && (
+              <Title level={5} style={{ marginBottom: 16, paddingLeft: 8 }}>
+                导出文档
+              </Title>
+            )}
+            
+            {catalogueTree.length > 0 ? (
+              <Tree
+                showIcon
+                defaultExpandAll
+                onSelect={handleTreeSelect}
+                treeData={catalogueTree}
+                style={{ fontSize: '14px' }}
+              />
+            ) : (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <Spin spinning={treeLoading}>
+                  <Text type="secondary">暂无目录数据</Text>
+                </Spin>
+              </div>
+            )}
+          </div>
+        </Sider>
+
+        {/* 右侧内容区域 */}
+        <Content style={{ 
+          padding: '24px',
+          background: '#fff',
+          overflow: 'auto'
+        }}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Card 
+              title={
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <FileTextOutlined style={{ marginRight: 8 }} />
+                  {selectedTitle || '选择左侧目录查看内容'}
+                </div>
+              }
+              style={{ height: '100%' }}
+              bodyStyle={{ height: 'calc(100% - 57px)', overflow: 'auto' }}
+            >
+              {selectedContent ? (
+                <div 
+                  style={{ 
+                    lineHeight: 1.8,
+                    fontSize: '14px'
+                  }}
+                  dangerouslySetInnerHTML={{ 
+                    __html: selectedContent.replace(/\n/g, '<br/>') 
+                  }}
+                />
+              ) : (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '60px 20px',
+                  color: 'rgba(0, 0, 0, 0.45)'
+                }}>
+                  <FileTextOutlined style={{ fontSize: 48, marginBottom: 16 }} />
+                  <Paragraph>
+                    请从左侧目录中选择一个文档来查看详细内容
+                  </Paragraph>
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        </Content>
+      </Layout>
     </div>
   );
 };

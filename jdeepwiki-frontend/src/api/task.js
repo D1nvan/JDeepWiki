@@ -51,6 +51,11 @@ export const TaskApi = {
   // 删除任务
   deleteTask: (taskId) => {
     return api.get(`/task/delete?taskId=${taskId}`);
+  },
+  
+  // 获取目录树
+  getCatalogueTree: (taskId) => {
+    return api.get(`/task/catalogue/tree?taskId=${taskId}`);
   }
 };
 
