@@ -99,8 +99,9 @@ public class AnalyzeCataloguePrompt {
     ## OUTPUT FORMAT
     <important>
     Make sure your final output is in the following format, the tag `documentation_structure` is required, and do not output any other text:
+    The `name` in output must in language of "中文".
     </important>
-    
+
     <documentation_structure>
     {
         "items": [

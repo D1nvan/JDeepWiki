@@ -24,12 +24,81 @@ import {
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
+import 'highlight.js/styles/github.css'; // 代码高亮样式
 import { TaskApi } from '../api/task';
 import { formatDateTime } from '../utils/dateFormat';
 import PageLoading from '../components/PageLoading';
 
 const { Title, Text, Paragraph } = Typography;
 const { Sider, Content } = Layout;
+
+// Markdown 自定义样式
+const markdownStyles = {
+  container: {
+    lineHeight: 1.8,
+    fontSize: '14px',
+    color: '#262626'
+  },
+  heading: {
+    marginTop: '24px',
+    marginBottom: '16px',
+    borderBottom: '1px solid #f0f0f0',
+    paddingBottom: '8px'
+  },
+  blockquote: {
+    borderLeft: '4px solid #1890ff',
+    paddingLeft: '16px',
+    margin: '16px 0',
+    background: '#f6f8fa',
+    padding: '16px',
+    borderRadius: '6px'
+  },
+  inlineCode: {
+    background: '#f6f8fa',
+    padding: '2px 6px',
+    borderRadius: '3px',
+    fontSize: '13px',
+    color: '#d73a49',
+    fontFamily: '"SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", "monospace"'
+  },
+  codeBlock: {
+    background: '#f6f8fa',
+    padding: '16px',
+    borderRadius: '6px',
+    overflow: 'auto',
+    fontSize: '13px',
+    fontFamily: '"SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", "monospace"',
+    border: '1px solid #e1e4e8'
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    border: '1px solid #d9d9d9',
+    marginTop: '16px',
+    marginBottom: '16px'
+  },
+  th: {
+    border: '1px solid #d9d9d9',
+    padding: '12px 16px',
+    background: '#fafafa',
+    fontWeight: 'bold',
+    textAlign: 'left'
+  },
+  td: {
+    border: '1px solid #d9d9d9',
+    padding: '12px 16px'
+  },
+  list: {
+    paddingLeft: '20px',
+    margin: '16px 0'
+  },
+  listItem: {
+    marginBottom: '6px'
+  }
+};
 
 const RepoDetail = () => {
   const navigate = useNavigate();
@@ -296,14 +365,141 @@ const RepoDetail = () => {
             >
               {selectedContent ? (
                 <div 
-                  style={{ 
-                    lineHeight: 1.8,
-                    fontSize: '14px'
-                  }}
-                  dangerouslySetInnerHTML={{ 
-                    __html: selectedContent.replace(/\n/g, '<br/>') 
-                  }}
-                />
+                  style={markdownStyles.container}
+                  className="markdown-content"
+                >
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeHighlight]}
+                    components={{
+                      // 自定义渲染组件
+                      h1: ({children}) => (
+                        <Typography.Title 
+                          level={2} 
+                          style={markdownStyles.heading}
+                        >
+                          {children}
+                        </Typography.Title>
+                      ),
+                      h2: ({children}) => (
+                        <Typography.Title 
+                          level={3} 
+                          style={markdownStyles.heading}
+                        >
+                          {children}
+                        </Typography.Title>
+                      ),
+                      h3: ({children}) => (
+                        <Typography.Title 
+                          level={4} 
+                          style={markdownStyles.heading}
+                        >
+                          {children}
+                        </Typography.Title>
+                      ),
+                      h4: ({children}) => (
+                        <Typography.Title 
+                          level={5}
+                          style={markdownStyles.heading}
+                        >
+                          {children}
+                        </Typography.Title>
+                      ),
+                      p: ({children}) => (
+                        <Typography.Paragraph style={{ marginBottom: '16px' }}>
+                          {children}
+                        </Typography.Paragraph>
+                      ),
+                      blockquote: ({children}) => (
+                        <div style={markdownStyles.blockquote}>
+                          {children}
+                        </div>
+                      ),
+                      code: ({node, inline, className, children, ...props}) => {
+                        if (inline) {
+                          return (
+                            <code 
+                              style={markdownStyles.inlineCode}
+                              {...props}
+                            >
+                              {children}
+                            </code>
+                          );
+                        }
+                        return (
+                          <pre style={markdownStyles.codeBlock}>
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          </pre>
+                        );
+                      },
+                      table: ({children}) => (
+                        <div style={{ overflow: 'auto', margin: '16px 0' }}>
+                          <table style={markdownStyles.table}>
+                            {children}
+                          </table>
+                        </div>
+                      ),
+                      th: ({children}) => (
+                        <th style={markdownStyles.th}>
+                          {children}
+                        </th>
+                      ),
+                      td: ({children}) => (
+                        <td style={markdownStyles.td}>
+                          {children}
+                        </td>
+                      ),
+                      ul: ({children}) => (
+                        <ul style={markdownStyles.list}>
+                          {children}
+                        </ul>
+                      ),
+                      ol: ({children}) => (
+                        <ol style={markdownStyles.list}>
+                          {children}
+                        </ol>
+                      ),
+                      li: ({children}) => (
+                        <li style={markdownStyles.listItem}>
+                          {children}
+                        </li>
+                      ),
+                      a: ({children, href}) => (
+                        <a 
+                          href={href} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          style={{ color: '#1890ff', textDecoration: 'none' }}
+                          onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
+                          onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
+                        >
+                          {children}
+                        </a>
+                      ),
+                      strong: ({children}) => (
+                        <strong style={{ fontWeight: 600, color: '#262626' }}>
+                          {children}
+                        </strong>
+                      ),
+                      em: ({children}) => (
+                        <em style={{ fontStyle: 'italic', color: '#595959' }}>
+                          {children}
+                        </em>
+                      ),
+                      hr: () => (
+                        <hr style={{ 
+                          margin: '24px 0', 
+                          border: 'none', 
+                          borderTop: '1px solid #f0f0f0' 
+                        }} />
+                      )
+                    }}
+                  >
+                    {selectedContent}
+                  </ReactMarkdown>
+                </div>
               ) : (
                 <div style={{ 
                   textAlign: 'center', 
