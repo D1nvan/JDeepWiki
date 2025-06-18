@@ -111,6 +111,7 @@ const RepoDetail = () => {
   const [selectedTitle, setSelectedTitle] = useState('');
   const [error, setError] = useState('');
   const [treeLoading, setTreeLoading] = useState(false);
+  const [expandedKeys, setExpandedKeys] = useState([]);
 
   // 获取任务详情和目录树
   useEffect(() => {
@@ -133,6 +134,12 @@ const RepoDetail = () => {
         if (treeResponse.code === 200) {
           const treeData = buildTreeData(treeResponse.data);
           setCatalogueTree(treeData);
+          
+          // 初始时展开所有一级节点（只展开第一层）
+          const firstLevelKeys = treeResponse.data
+            .filter(item => item.children && item.children.length > 0)
+            .map(item => item.catalogueId);
+          setExpandedKeys(firstLevelKeys);
           
           // 默认选择第一个有内容的叶子节点
           const firstLeaf = findFirstLeafWithContent(treeResponse.data);
@@ -161,17 +168,19 @@ const RepoDetail = () => {
 
   // 构建树形数据结构
   const buildTreeData = (data) => {
-    const buildNode = (item) => ({
-      title: item.name, // 一级和二级目录都显示name
+    const buildNode = (item, level = 0) => ({
+      title: item.name,
       key: item.catalogueId,
       icon: item.children && item.children.length > 0 ? <FolderOutlined /> : <FileTextOutlined />,
       content: item.content,
       name: item.name,
+      level: level, // 添加层级信息
       isLeaf: !item.children || item.children.length === 0,
-      children: item.children ? item.children.map(buildNode) : []
+      isParent: item.children && item.children.length > 0, // 是否为父节点
+      children: item.children ? item.children.map(child => buildNode(child, level + 1)) : []
     });
 
-    return data.map(buildNode);
+    return data.map(item => buildNode(item, 0));
   };
 
   // 查找第一个有内容的叶子节点
@@ -191,7 +200,7 @@ const RepoDetail = () => {
   const findNodeContent = (treeData, key) => {
     for (const node of treeData) {
       if (node.key === key) {
-        return { content: node.content, title: node.title };
+        return { content: node.content, title: node.title, isParent: node.isParent };
       }
       if (node.children && node.children.length > 0) {
         const found = findNodeContent(node.children, key);
@@ -201,15 +210,20 @@ const RepoDetail = () => {
     return null;
   };
 
-  // 处理节点选择
+  // 处理节点选择 - 只有叶子节点才显示内容
   const handleTreeSelect = (selectedKeys) => {
     if (selectedKeys.length > 0) {
       const nodeData = findNodeContent(catalogueTree, selectedKeys[0]);
-      if (nodeData) {
+      if (nodeData && !nodeData.isParent) {
         setSelectedContent(nodeData.content || '暂无内容');
         setSelectedTitle(nodeData.title || '');
       }
     }
+  };
+
+  // 处理节点展开收缩
+  const handleTreeExpand = (expandedKeysValue) => {
+    setExpandedKeys(expandedKeysValue);
   };
 
   // 随机生成星星数
@@ -252,7 +266,8 @@ const RepoDetail = () => {
       <div style={{ 
         padding: '16px 24px', 
         borderBottom: '1px solid #f0f0f0',
-        background: '#fff'
+        background: '#fff',
+        flexShrink: 0
       }}>
         <Breadcrumb style={{ marginBottom: 16 }}>
           <Breadcrumb.Item href="/" onClick={(e) => {
@@ -300,28 +315,186 @@ const RepoDetail = () => {
       </div>
 
       {/* 主体布局 */}
-      <Layout style={{ flex: 1 }}>
+      <Layout style={{ flex: 1, minHeight: 0 }}>
         {/* 左侧目录树 */}
         <Sider 
-          width={300} 
+          width={280} 
           style={{ 
             background: '#fff',
-            borderRight: '1px solid #f0f0f0'
+            borderRight: '1px solid #f0f0f0',
+            height: '100%',
+            overflow: 'hidden'
           }}
         >
-          <div style={{ padding: '16px 8px' }}>
-            <Title level={5} style={{ marginBottom: 16, paddingLeft: 8 }}>
-              导出文档
-            </Title>
-            
-            {catalogueTree.length > 0 ? (
+          <div style={{ padding: '12px 8px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, overflow: 'auto', paddingRight: '4px' }}>
+              {catalogueTree.length > 0 ? (
+                <>
+                  <style>
+                    {`
+                      /* 基础树节点样式 */
+                      .custom-tree .ant-tree-treenode {
+                        padding: 2px 0 !important;
+                        margin: 0 !important;
+                      }
+                      
+                      .custom-tree .ant-tree-node-content-wrapper {
+                        padding: 6px 8px !important;
+                        border-radius: 4px !important;
+                        transition: all 0.15s ease !important;
+                        margin: 0 !important;
+                        height: 32px !important;
+                        line-height: 1.5 !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        box-sizing: border-box !important;
+                      }
+                      
+                      .custom-tree .ant-tree-node-content-wrapper:hover {
+                        background-color: #f5f5f5 !important;
+                      }
+                      
+                      .custom-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
+                        background-color: #e6f7ff !important;
+                        border: 1px solid #91d5ff !important;
+                        box-shadow: 0 1px 2px rgba(24, 144, 255, 0.08) !important;
+                      }
+                      
+                      /* 展开折叠按钮样式 */
+                      .custom-tree .ant-tree-switcher {
+                        width: 20px !important;
+                        height: 20px !important;
+                        line-height: 20px !important;
+                        margin-right: 6px !important;
+                        border-radius: 3px !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        flex-shrink: 0 !important;
+                        vertical-align: top !important;
+                      }
+                      
+                      .custom-tree .ant-tree-switcher:hover {
+                        background-color: #f0f0f0 !important;
+                      }
+                      
+                      .custom-tree .ant-tree-switcher-icon {
+                        font-size: 12px !important;
+                        transform: none !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                      }
+                      
+                      /* 隐藏图标 */
+                      .custom-tree .ant-tree-iconEle {
+                        display: none !important;
+                      }
+                      
+                      /* 一级标题样式 */
+                      .custom-tree .tree-title-level-0 {
+                        font-size: 15px !important;
+                        font-weight: 600 !important;
+                        color: #262626 !important;
+                        cursor: pointer !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        line-height: 1.5 !important;
+                        height: 20px !important;
+                      }
+                      
+                      /* 二级标题样式 */
+                      .custom-tree .tree-title-level-1 {
+                        font-size: 14px !important;
+                        font-weight: 400 !important;
+                        color: #595959 !important;
+                        cursor: pointer !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        line-height: 1.5 !important;
+                        height: 20px !important;
+                      }
+                      
+                      /* 二级标题前的小圆点 */
+                      .custom-tree .tree-title-level-1::before {
+                        content: "•" !important;
+                        margin-right: 6px !important;
+                        font-size: 12px !important;
+                        color: #bfbfbf !important;
+                        line-height: 1 !important;
+                        display: flex !important;
+                        align-items: center !important;
+                      }
+                      
+                      /* 子树缩进和连线 */
+                      .custom-tree .ant-tree-child-tree {
+                        margin-left: 16px !important;
+                        border-left: 1px dashed #e8e8e8 !important;
+                        padding-left: 8px !important;
+                      }
+                      
+                      /* 一级节点禁用选中 */
+                      .custom-tree .tree-title-level-0.tree-parent-title {
+                        pointer-events: none !important;
+                      }
+                      
+                      .custom-tree .ant-tree-treenode:has(.tree-title-level-0) .ant-tree-node-content-wrapper.ant-tree-node-selected {
+                        background-color: transparent !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                      }
+                      
+                      .custom-tree .ant-tree-treenode:has(.tree-title-level-0) .ant-tree-node-content-wrapper:hover {
+                        background-color: #f8f8f8 !important;
+                      }
+                      
+                      /* 树节点间距优化 */
+                      .custom-tree .ant-tree-list-holder-inner {
+                        padding: 4px 0 !important;
+                      }
+                      
+                      /* 叶子节点样式 */
+                      .custom-tree .ant-tree-treenode-leaf-last .ant-tree-node-content-wrapper {
+                        margin-bottom: 0 !important;
+                      }
+                      
+                      /* 内容区域滚动条样式 */
+                      .ant-card-body::-webkit-scrollbar {
+                        width: 8px;
+                      }
+                      
+                      .ant-card-body::-webkit-scrollbar-track {
+                        background: #f5f5f5;
+                        border-radius: 4px;
+                      }
+                      
+                      .ant-card-body::-webkit-scrollbar-thumb {
+                        background: #bfbfbf;
+                        border-radius: 4px;
+                      }
+                      
+                      .ant-card-body::-webkit-scrollbar-thumb:hover {
+                        background: #999;
+                      }
+                    `}
+                  </style>
               <Tree
-                showIcon
-                defaultExpandAll
+                    expandedKeys={expandedKeys}
+                    onExpand={handleTreeExpand}
                 onSelect={handleTreeSelect}
                 treeData={catalogueTree}
+                    className="custom-tree"
+                    selectable={true}
+                    titleRender={(nodeData) => (
+                      <span 
+                        className={`tree-title-level-${nodeData.level} ${nodeData.isParent ? 'tree-parent-title' : ''}`}
+                      >
+                        {nodeData.title}
+                      </span>
+                    )}
                 style={{ fontSize: '14px' }}
               />
+                </>
             ) : (
               <div style={{ textAlign: 'center', padding: '20px 0' }}>
                 <Spin spinning={treeLoading}>
@@ -329,6 +502,7 @@ const RepoDetail = () => {
                 </Spin>
               </div>
             )}
+            </div>
           </div>
         </Sider>
 
@@ -336,12 +510,16 @@ const RepoDetail = () => {
         <Content style={{ 
           padding: '24px',
           background: '#fff',
-          overflow: 'auto'
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          overflow: 'hidden'
         }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}
           >
             <Card 
               title={
@@ -350,8 +528,15 @@ const RepoDetail = () => {
                   {selectedTitle || '选择左侧目录查看内容'}
                 </div>
               }
-              style={{ height: '100%' }}
-              bodyStyle={{ height: 'calc(100% - 57px)', overflow: 'auto' }}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+              bodyStyle={{ 
+                flex: 1, 
+                overflow: 'auto', 
+                padding: '24px',
+                height: 0,
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#bfbfbf #f5f5f5'
+              }}
             >
                             {selectedContent ? (
                 <div 
@@ -512,10 +697,10 @@ const RepoDetail = () => {
                           
                           if (Array.isArray(children)) {
                             textContent = children.map(extractText).join('');
-                          } else {
+                              } else {
                             textContent = extractText(children);
-                          }
-                          
+                              }
+                              
                           textContent = textContent.trim();
                           
                           // 检查是否包含Mermaid语法 - 更严格的匹配
@@ -556,12 +741,12 @@ const RepoDetail = () => {
                           if (isMermaid && textContent) {
                             // 生成唯一ID
                             const uniqueId = `mermaid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                            
+                                
                             return (
                               <MermaidChart 
                                 chart={textContent} 
-                                id={uniqueId}
-                                key={uniqueId}
+                                  id={uniqueId}
+                                  key={uniqueId}
                               />
                             );
                           }
