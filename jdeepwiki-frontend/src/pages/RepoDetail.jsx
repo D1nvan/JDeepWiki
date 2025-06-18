@@ -18,9 +18,7 @@ import {
   HomeOutlined,
   ShareAltOutlined,
   FileTextOutlined,
-  FolderOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined
+  FolderOutlined
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -112,7 +110,6 @@ const RepoDetail = () => {
   const [selectedContent, setSelectedContent] = useState('');
   const [selectedTitle, setSelectedTitle] = useState('');
   const [error, setError] = useState('');
-  const [collapsed, setCollapsed] = useState(false);
   const [treeLoading, setTreeLoading] = useState(false);
 
   // 获取任务详情和目录树
@@ -307,25 +304,15 @@ const RepoDetail = () => {
         {/* 左侧目录树 */}
         <Sider 
           width={300} 
-          collapsible
-          collapsed={collapsed}
-          onCollapse={setCollapsed}
           style={{ 
             background: '#fff',
             borderRight: '1px solid #f0f0f0'
           }}
-          trigger={
-            <div style={{ textAlign: 'center', padding: '8px' }}>
-              {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            </div>
-          }
         >
           <div style={{ padding: '16px 8px' }}>
-            {!collapsed && (
-              <Title level={5} style={{ marginBottom: 16, paddingLeft: 8 }}>
-                导出文档
-              </Title>
-            )}
+            <Title level={5} style={{ marginBottom: 16, paddingLeft: 8 }}>
+              导出文档
+            </Title>
             
             {catalogueTree.length > 0 ? (
               <Tree
@@ -508,7 +495,6 @@ const RepoDetail = () => {
 
                           // 尝试提取文本内容来检测是否是Mermaid
                           let textContent = '';
-                          let isMermaid = false;
                           
                           // 递归提取所有文本内容
                           const extractText = (node) => {
@@ -530,22 +516,42 @@ const RepoDetail = () => {
                             textContent = extractText(children);
                           }
                           
-                          // 检查是否包含Mermaid语法
+                          textContent = textContent.trim();
+                          
+                          // 检查是否包含Mermaid语法 - 更严格的匹配
                           const mermaidPatterns = [
-                            /^graph\s/i,
-                            /^flowchart\s/i,
-                            /^sequenceDiagram/i,
-                            /^classDiagram/i,
-                            /^stateDiagram/i,
-                            /^erDiagram/i,
-                            /^gantt/i,
-                            /^journey/i,
-                            /^pie\s/i,
-                            /^gitgraph/i
+                            /^graph\s+(TD|TB|BT|RL|LR)/i,
+                            /^flowchart\s+(TD|TB|BT|RL|LR)/i,
+                            /^sequenceDiagram[\s\n]/i,
+                            /^classDiagram[\s\n]/i,
+                            /^stateDiagram(-v2)?[\s\n]/i,
+                            /^erDiagram[\s\n]/i,
+                            /^gantt[\s\n]/i,
+                            /^journey[\s\n]/i,
+                            /^pie\s+title/i,
+                            /^gitgraph[\s\n]/i
                           ];
                           
-                          textContent = textContent.trim();
-                          isMermaid = mermaidPatterns.some(pattern => pattern.test(textContent));
+                          // 额外验证：必须包含基本的Mermaid语法元素
+                          const hasValidMermaidSyntax = (content) => {
+                            // 检查是否有箭头、连接符等Mermaid特征
+                            const mermaidFeatures = [
+                              /-->/,     // 箭头
+                              /---/,     // 连线
+                              /\[\s*.*\s*\]/,  // 方括号节点
+                              /\(\s*.*\s*\)/,  // 圆括号节点
+                              /participant\s+/i,  // 序列图参与者
+                              /class\s+\w+/i,     // 类图
+                              /state\s+\w+/i,     // 状态图
+                              /\|\w+\|/          // 实体关系图
+                            ];
+                            
+                            return mermaidFeatures.some(pattern => pattern.test(content));
+                          };
+                          
+                          const isMermaid = mermaidPatterns.some(pattern => pattern.test(textContent)) 
+                                           && hasValidMermaidSyntax(textContent)
+                                           && textContent.length > 10; // 最小长度检查
                           
                           if (isMermaid && textContent) {
                             // 生成唯一ID

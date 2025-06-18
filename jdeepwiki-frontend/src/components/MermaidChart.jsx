@@ -98,6 +98,84 @@ const MermaidChart = React.memo(({ chart, id }) => {
       return;
     }
 
+    // 预验证和修复Mermaid语法
+    const preprocessMermaidSyntax = (content) => {
+      let processed = content.trim();
+      
+      // 修复 subgraph 语法问题
+      // 1. 处理包含括号的 subgraph 标题
+      processed = processed.replace(/subgraph\s+([^"\n\r]+?)(\s*\([^)]*\))/g, (match, title, parentheses) => {
+        const cleanTitle = title.trim() + parentheses;
+        return `subgraph "${cleanTitle}"`;
+      });
+      
+      // 2. 处理没有引号的 subgraph 标题（包含空格的）
+      processed = processed.replace(/subgraph\s+([^"\n\r]+?)(?=\s*\n|$)/g, (match, title) => {
+        const cleanTitle = title.trim();
+        // 如果标题包含空格或特殊字符，添加引号
+        if (cleanTitle.includes(' ') || /[()[\]{}]/.test(cleanTitle)) {
+          return `subgraph "${cleanTitle}"`;
+        }
+        return match;
+      });
+      
+      return processed;
+    };
+
+    const isValidMermaidSyntax = (content) => {
+      const trimmed = content.trim();
+      
+      // 基本格式检查
+      if (trimmed.length < 10) return false;
+      
+      // 检查是否以有效的Mermaid关键字开头
+      const validStarters = [
+        /^graph\s+(TD|TB|BT|RL|LR)/i,
+        /^flowchart\s+(TD|TB|BT|RL|LR)/i,
+        /^sequenceDiagram/i,
+        /^classDiagram/i,
+        /^stateDiagram(-v2)?/i,
+        /^erDiagram/i,
+        /^gantt/i,
+        /^journey/i,
+        /^pie\s+title/i,
+        /^gitgraph/i
+      ];
+      
+      const hasValidStarter = validStarters.some(pattern => pattern.test(trimmed));
+      if (!hasValidStarter) return false;
+      
+      // 检查是否包含基本的Mermaid语法元素
+      const mermaidFeatures = [
+        /-->/,     // 箭头
+        /---/,     // 连线
+        /\[\s*.*\s*\]/,  // 方括号节点
+        /\(\s*.*\s*\)/,  // 圆括号节点
+        /\{\s*.*\s*\}/,  // 大括号节点
+        /participant\s+/i,  // 序列图参与者
+        /class\s+\w+/i,     // 类图
+        /state\s+\w+/i,     // 状态图
+        /\|\w+\|/,          // 实体关系图
+        /subgraph/i,        // 子图
+        /direction\s+(TD|TB|BT|RL|LR)/i  // 方向指令
+      ];
+      
+      return mermaidFeatures.some(pattern => pattern.test(trimmed));
+    };
+
+    // 预处理图表内容
+    const processedChartContent = preprocessMermaidSyntax(chartContent);
+
+    // 如果不是有效的Mermaid语法，直接标记为无效
+    if (!isValidMermaidSyntax(processedChartContent)) {
+      safeSetState(() => {
+        setRenderState('invalid');
+        setErrorMessage('');
+        setSvgContent('');
+      });
+      return;
+    }
+
     console.log('开始渲染 Mermaid 图表:', chartId);
     safeSetState(() => {
       setRenderState('loading');
@@ -143,7 +221,7 @@ const MermaidChart = React.memo(({ chart, id }) => {
         console.log('调用 mermaid.render...');
         
         // 对于 Mermaid 11.x，使用 mermaid.render 方法
-        const { svg } = await mermaid.render(uniqueId, chartContent);
+        const { svg } = await mermaid.render(uniqueId, processedChartContent);
         
         console.log('图表渲染完成，设置 SVG 内容...');
         
@@ -162,15 +240,24 @@ const MermaidChart = React.memo(({ chart, id }) => {
           return;
         }
         
+        // 对于语法错误，标记为无效而不是错误
+        if (error.message && (
+          error.message.includes('Syntax error') ||
+          error.message.includes('Parse error') ||
+          error.message.includes('Lexical error')
+        )) {
+          safeSetState(() => {
+            setRenderState('invalid');
+            setErrorMessage('');
+            setSvgContent('');
+          });
+          return;
+        }
+        
         // 尝试修复语法问题
         try {
           console.log('尝试修复语法并重新渲染...');
-          let fixedChart = chartContent;
-          
-          // 修复 subgraph 括号问题
-          fixedChart = fixedChart.replace(/subgraph\s+([^(]+)\s*\([^)]+\)/g, (match, p1) => {
-            return `subgraph "${p1.trim()}"`;
-          });
+          let fixedChart = processedChartContent;
           
           // 修复其他常见问题
           fixedChart = fixedChart.replace(/subgraph\s+([^"\n\r;]+?)(\s|$|;)/g, 'subgraph "$1"$2');
@@ -190,8 +277,8 @@ const MermaidChart = React.memo(({ chart, id }) => {
           console.error('修复后仍然失败:', retryError);
           if (isMountedRef.current) {
             safeSetState(() => {
-              setRenderState('error');
-              setErrorMessage(`渲染失败: ${retryError.message}`);
+              setRenderState('invalid');
+              setErrorMessage('');
               setSvgContent('');
             });
           }
@@ -207,8 +294,8 @@ const MermaidChart = React.memo(({ chart, id }) => {
           console.error('异步渲染错误:', error);
           if (isMountedRef.current) {
             safeSetState(() => {
-              setRenderState('error');
-              setErrorMessage(`异步渲染失败: ${error.message}`);
+              setRenderState('invalid');
+              setErrorMessage('');
               setSvgContent('');
             });
           }
@@ -222,6 +309,11 @@ const MermaidChart = React.memo(({ chart, id }) => {
   }, [chartContent, chartId, safeSetState, cleanupTimeout]);
 
   console.log('MermaidChart 渲染状态:', renderState);
+
+  // 对于无效的Mermaid语法，返回一个特殊标识组件
+  if (renderState === 'invalid') {
+    return <div data-mermaid-invalid="true" style={{ display: 'none' }} />;
+  }
 
   if (renderState === 'error') {
     return (
