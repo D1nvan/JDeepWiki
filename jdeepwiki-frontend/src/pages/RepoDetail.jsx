@@ -31,6 +31,7 @@ import 'highlight.js/styles/github.css'; // 代码高亮样式
 import { TaskApi } from '../api/task';
 import { formatDateTime } from '../utils/dateFormat';
 import PageLoading from '../components/PageLoading';
+import MermaidChart from '../components/MermaidChart';
 
 const { Title, Text, Paragraph } = Typography;
 const { Sider, Content } = Layout;
@@ -62,7 +63,9 @@ const markdownStyles = {
     borderRadius: '3px',
     fontSize: '13px',
     color: '#d73a49',
-    fontFamily: '"SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", "monospace"'
+    fontFamily: '"SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", "monospace"',
+    border: '1px solid #e1e4e8',
+    verticalAlign: 'baseline'
   },
   codeBlock: {
     background: '#f6f8fa',
@@ -162,7 +165,7 @@ const RepoDetail = () => {
   // 构建树形数据结构
   const buildTreeData = (data) => {
     const buildNode = (item) => ({
-      title: item.title,
+      title: item.name, // 一级和二级目录都显示name
       key: item.catalogueId,
       icon: item.children && item.children.length > 0 ? <FolderOutlined /> : <FileTextOutlined />,
       content: item.content,
@@ -363,15 +366,89 @@ const RepoDetail = () => {
               style={{ height: '100%' }}
               bodyStyle={{ height: 'calc(100% - 57px)', overflow: 'auto' }}
             >
-              {selectedContent ? (
+                            {selectedContent ? (
                 <div 
                   style={markdownStyles.container}
                   className="markdown-content"
                 >
+                  <style>
+                    {`
+                      .markdown-content code:not(pre code) {
+                        display: inline !important;
+                        padding: 0 3px !important;
+                        margin: 0 !important;
+                        background: #f8f8f8 !important;
+                        color: #e83e8c !important;
+                        border-radius: 3px !important;
+                        font-size: 0.9em !important;
+                        line-height: inherit !important;
+                        white-space: nowrap !important;
+                        vertical-align: baseline !important;
+                        border: none !important;
+                        box-sizing: border-box !important;
+                      }
+                    `}
+                  </style>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeHighlight]}
                     components={{
+                      // 测试函数，打印所有代码块
+                      code: ({node, inline, className = '', children, ...props}) => {
+                        console.log('Code block detected:', { inline, className, children });
+                        
+                        // 只处理内联代码，让pre组件处理代码块
+                        if (inline) {
+                          return (
+                            <code 
+                              style={{
+                                background: '#f8f8f8',
+                                padding: '0 3px',
+                                margin: '0',
+                                borderRadius: '3px',
+                                fontSize: '0.9em',
+                                color: '#e83e8c',
+                                fontFamily: 'SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                                display: 'inline',
+                                lineHeight: 'inherit',
+                                whiteSpace: 'nowrap',
+                                verticalAlign: 'baseline',
+                                border: 'none',
+                                boxSizing: 'border-box'
+                              }}
+                              className={className}
+                              {...props}
+                            >
+                              {children}
+                            </code>
+                          );
+                        }
+                        
+                        // 非内联代码由pre组件处理
+                        return (
+                          <code 
+                            style={{
+                              background: 'transparent',
+                              padding: '0',
+                              margin: '0',
+                              borderRadius: '0',
+                              fontSize: 'inherit',
+                              color: 'inherit',
+                              fontFamily: 'SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                              display: 'block',
+                              lineHeight: '1.45',
+                              whiteSpace: 'pre',
+                              verticalAlign: 'baseline',
+                              border: 'none',
+                              boxSizing: 'border-box'
+                            }}
+                            className={className}
+                            {...props}
+                          >
+                            {children}
+                          </code>
+                        );
+                      },
                       // 自定义渲染组件
                       h1: ({children}) => (
                         <Typography.Title 
@@ -406,7 +483,13 @@ const RepoDetail = () => {
                         </Typography.Title>
                       ),
                       p: ({children}) => (
-                        <Typography.Paragraph style={{ marginBottom: '16px' }}>
+                        <Typography.Paragraph 
+                          style={{ 
+                            marginBottom: '16px',
+                            lineHeight: '1.8',
+                            wordBreak: 'break-word'
+                          }}
+                        >
                           {children}
                         </Typography.Paragraph>
                       ),
@@ -414,23 +497,77 @@ const RepoDetail = () => {
                         <div style={markdownStyles.blockquote}>
                           {children}
                         </div>
-                      ),
-                      code: ({node, inline, className, children, ...props}) => {
-                        if (inline) {
-                          return (
-                            <code 
-                              style={markdownStyles.inlineCode}
-                              {...props}
-                            >
-                              {children}
-                            </code>
-                          );
+                                              ),
+                      pre: ({children}) => {
+                        // 安全地检查子元素是否是 Mermaid 图表
+                        try {
+                          // 验证 children 是否存在
+                          if (!children) {
+                            return <pre style={markdownStyles.codeBlock}>{children}</pre>;
+                          }
+
+                          // 尝试提取文本内容来检测是否是Mermaid
+                          let textContent = '';
+                          let isMermaid = false;
+                          
+                          // 递归提取所有文本内容
+                          const extractText = (node) => {
+                            if (typeof node === 'string') {
+                              return node;
+                            } else if (node && node.props && node.props.children) {
+                              if (typeof node.props.children === 'string') {
+                                return node.props.children;
+                              } else if (Array.isArray(node.props.children)) {
+                                return node.props.children.map(extractText).join('');
+                              }
+                            }
+                            return '';
+                          };
+                          
+                          if (Array.isArray(children)) {
+                            textContent = children.map(extractText).join('');
+                          } else {
+                            textContent = extractText(children);
+                          }
+                          
+                          // 检查是否包含Mermaid语法
+                          const mermaidPatterns = [
+                            /^graph\s/i,
+                            /^flowchart\s/i,
+                            /^sequenceDiagram/i,
+                            /^classDiagram/i,
+                            /^stateDiagram/i,
+                            /^erDiagram/i,
+                            /^gantt/i,
+                            /^journey/i,
+                            /^pie\s/i,
+                            /^gitgraph/i
+                          ];
+                          
+                          textContent = textContent.trim();
+                          isMermaid = mermaidPatterns.some(pattern => pattern.test(textContent));
+                          
+                          if (isMermaid && textContent) {
+                            // 生成唯一ID
+                            const uniqueId = `mermaid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                            
+                            return (
+                              <MermaidChart 
+                                chart={textContent} 
+                                id={uniqueId}
+                                key={uniqueId}
+                              />
+                            );
+                          }
+                        } catch (e) {
+                          // 如果处理过程中出现任何错误，回退到普通的 pre 渲染
+                          console.warn('Pre component Mermaid processing error:', e);
                         }
+                        
+                        // 默认情况：渲染普通的代码块
                         return (
                           <pre style={markdownStyles.codeBlock}>
-                            <code className={className} {...props}>
-                              {children}
-                            </code>
+                            {children}
                           </pre>
                         );
                       },
