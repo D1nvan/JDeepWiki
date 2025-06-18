@@ -48,11 +48,8 @@ const AddRepoModal = ({ visible, onCancel, onSuccess }) => {
         
         const formData = new FormData();
         formData.append('file', fileList[0].originFileObj);
-        
-        // 添加其他表单字段
-        Object.keys(values).forEach(key => {
-          formData.append(key, values[key]);
-        });
+        formData.append('projectName', values.projectName);
+        formData.append('userName', values.userName);
         formData.append('sourceType', 'zip');
         
         response = await TaskApi.createFromZip(formData);
@@ -90,10 +87,16 @@ const AddRepoModal = ({ visible, onCancel, onSuccess }) => {
     setSourceType(e.target.value);
     // 切换类型时重置部分表单字段
     form.setFieldsValue({
-      branch: sourceType === 'zip' ? '' : undefined,
-      userName: sourceType === 'zip' ? '' : undefined,
-      password: sourceType === 'zip' ? '' : undefined,
+      projectUrl: undefined,
+      branch: undefined,
+      userName: '',
+      password: undefined,
     });
+    
+    // 清除文件列表
+    if (e.target.value === 'git') {
+      setFileList([]);
+    }
   };
 
   // 文件上传前校验
@@ -163,17 +166,6 @@ const AddRepoModal = ({ visible, onCancel, onSuccess }) => {
         </Form.Item>
         
         <Form.Item
-          name="projectUrl"
-          label="项目URL"
-          rules={[
-            { required: true, message: '请输入项目URL' },
-            { type: 'url', message: '请输入有效的URL地址' }
-          ]}
-        >
-          <Input placeholder="请输入项目URL，例如: https://github.com/username/repo" prefix={<LinkOutlined />} />
-        </Form.Item>
-        
-        <Form.Item
           name="sourceType"
           label="源类型"
         >
@@ -196,6 +188,17 @@ const AddRepoModal = ({ visible, onCancel, onSuccess }) => {
         >
           {sourceType === 'git' && (
             <>
+              <Form.Item
+                name="projectUrl"
+                label="项目URL"
+                rules={[
+                  { required: true, message: '请输入项目URL' },
+                  { type: 'url', message: '请输入有效的URL地址' }
+                ]}
+              >
+                <Input placeholder="请输入项目URL，例如: https://github.com/username/repo" prefix={<LinkOutlined />} />
+              </Form.Item>
+
               <Form.Item
                 name="branch"
                 label="分支"
@@ -230,14 +233,24 @@ const AddRepoModal = ({ visible, onCancel, onSuccess }) => {
           style={{ overflow: 'hidden' }}
         >
           {sourceType === 'zip' && (
-            <Form.Item
-              label="ZIP文件"
-              required
-            >
-              <Upload {...uploadProps} accept=".zip">
-                <Button icon={<UploadOutlined />}>选择ZIP文件</Button>
-              </Upload>
-            </Form.Item>
+            <>
+              <Form.Item
+                name="userName"
+                label="用户名"
+                rules={[{ required: true, message: '请输入用户名' }]}
+              >
+                <Input placeholder="请输入用户名" />
+              </Form.Item>
+
+              <Form.Item
+                label="ZIP文件"
+                required
+              >
+                <Upload {...uploadProps} accept=".zip">
+                  <Button icon={<UploadOutlined />}>选择ZIP文件</Button>
+                </Upload>
+              </Form.Item>
+            </>
           )}
         </motion.div>
         

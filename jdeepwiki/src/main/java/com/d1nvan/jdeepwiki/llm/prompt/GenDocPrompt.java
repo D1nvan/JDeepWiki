@@ -151,11 +151,10 @@ public class GenDocPrompt {
     ## Performance Analysis
     [Performance characteristics and optimization recommendations]
 
-    ## Troubleshooting Guide
     [Common issues and resolution approaches]
 
     ## References
-    [^1]: [File reference with description]({{git_repository}}/path/to/file)
+    [^1]: [File reference with description](/path/to/file)
     </docs>
 
     # QUALITY ASSURANCE
@@ -173,6 +172,7 @@ public class GenDocPrompt {
     - Check code examples
     - Confirm link validity
     - Test visualization rendering
+    - All analysis must be based on the real files read by tool, do not make up any information
 
     # OUTPUT SPECIFICATIONS
 
@@ -182,6 +182,7 @@ public class GenDocPrompt {
     4. Ensure accessibility
     5. Validate technical accuracy
     6. Document version control
+    7. Only output the final result, do not output any other questions or text
 
     <execution_notes>
     - Reference all code directly from repository

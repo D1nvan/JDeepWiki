@@ -97,8 +97,10 @@ public class AnalyzeCataloguePrompt {
     - Address test data management and environment isolation
 
     ## OUTPUT FORMAT
-    Use the following format:
-
+    <important>
+    Make sure your final output is in the following format, the tag `documentation_structure` is required, and do not output any other text:
+    </important>
+    
     <documentation_structure>
     {
         "items": [

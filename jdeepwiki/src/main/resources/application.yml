@@ -7,7 +7,7 @@ spring:
   ai:
     openai:
       base-url: https://openrouter.ai/api
-      api-key: ${YOUR_KEY}
+      api-key: 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
       chat:
         options:
           model: deepseek/deepseek-chat-v3-0324:free

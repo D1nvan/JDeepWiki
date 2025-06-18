@@ -49,11 +49,8 @@ const TaskCreate = () => {
         
         const formData = new FormData();
         formData.append('file', fileList[0].originFileObj);
-        
-        // 添加其他表单字段
-        Object.keys(values).forEach(key => {
-          formData.append(key, values[key]);
-        });
+        formData.append('projectName', values.projectName);
+        formData.append('userName', values.userName);
         formData.append('sourceType', 'zip');
         
         response = await TaskApi.createFromZip(formData);
@@ -80,13 +77,14 @@ const TaskCreate = () => {
 
   // 处理源类型改变
   const handleSourceTypeChange = (e) => {
+    console.log('源类型改变为:', e.target.value);
     setSourceType(e.target.value);
     // 切换类型时重置部分表单字段
     form.setFieldsValue({
-      projectUrl: e.target.value === 'zip' ? undefined : '',
-      branch: e.target.value === 'zip' ? undefined : '',
+      projectUrl: undefined,
+      branch: undefined,
       userName: '',
-      password: e.target.value === 'zip' ? undefined : '',
+      password: undefined,
     });
     
     // 清除文件列表
@@ -98,8 +96,8 @@ const TaskCreate = () => {
   // 文件上传前校验
   const beforeUpload = (file) => {
     const isZip = file.type === 'application/zip' || 
-                 file.type === 'application/x-zip-compressed' ||
-                 file.name.endsWith('.zip');
+                file.type === 'application/x-zip-compressed' ||
+                file.name.endsWith('.zip');
     if (!isZip) {
       message.error('只能上传ZIP文件');
     }
@@ -178,6 +176,8 @@ const TaskCreate = () => {
           </Form.Item>
           
           <Divider />
+          
+          {console.log('当前源类型:', sourceType)}
           
           {sourceType === 'git' ? (
             <>

@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -77,19 +78,22 @@ public class TaskService extends ServiceImpl<TaskMapper, Task> {
     }
 
     private void executeTask(ExecutionContext context) {
+        Task task = context.getTask();
         try{
             // 2.生成项目目录
             String fileTree = fileService.getFileTree(context.getLocalPath());
-            GenCatalogueDTO catalogueDTO = catalogueService.generateCatalogue(fileTree, context.getLocalPath());
+            GenCatalogueDTO catalogueDTO = catalogueService.generateCatalogue(fileTree, context);
 
             // 3.生成项目目录 并生成目录详情
             catalogueService.parallelGenerateCatalogueDetail(fileTree, catalogueDTO, context.getLocalPath());
+            task.setStatus(TaskStatusEnum.COMPLETED);
+            task.setUpdateTime(LocalDateTime.now());
         }catch (Exception e) {
             log.error("任务执行失败", e);
-            Task task = context.getTask();
             task.setStatus(TaskStatusEnum.FAILED);
             task.setFailReason(e.getMessage());
             task.setUpdateTime(LocalDateTime.now());
+        }finally{
             this.updateById(task);
         }
         
@@ -137,6 +141,7 @@ public class TaskService extends ServiceImpl<TaskMapper, Task> {
         return task;
     }
 
+    @Transactional
     public void deleteTaskByTaskId(String taskId) {
         Task task = getTaskByTaskId(taskId);
         if (task != null) {
@@ -152,6 +157,9 @@ public class TaskService extends ServiceImpl<TaskMapper, Task> {
                 // 即使删除目录失败，也继续删除数据库记录
             }
             
+            // 删除任务关联的目录
+            catalogueService.deleteCatalogueByTaskId(taskId);
+
             // 删除数据库记录
             this.removeById(task.getId());
             log.info("成功删除任务记录: {}", taskId);
